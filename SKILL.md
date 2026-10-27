@@ -1,7 +1,7 @@
 ---
 name: membean-training
 description: "Do Membean vocabulary training in the school Chrome session."
-version: 1.1.0
+version: 1.2.0
 author: Hermes Agent
 license: MIT
 platforms: [linux]
@@ -36,7 +36,7 @@ minutes and accuracy land in the wrong student's record.
 ### G1. Determine the expected account — state it before touching the browser
 
 - Expected identity, three facts, written into the response first:
-  `account = <student email> | name "<greeting name>" | class "<class label>"`.
+  `account = student@school.k12.tr | name "<greeting name>" | class <class label>`.
 - If the user names a different account for this run, that overrides the default — but only when it
   is explicit, and it must still be confirmed on the page in G3.
 - Ambiguous or missing account (no account named, several plausible sessions, only a personal Gmail
@@ -83,6 +83,38 @@ stop, click nothing, and report which identity the page shows. Answering questio
   `~/.hermes/chrome-debug`, Google session `student@school.k12.tr`.
 - Run the Account Gate (G1–G3) before everything else. A visible `input[type=password]` means signed
   out at the Google layer — stop and hand it to the user.
+
+## Hosts: Hermes, Claude Code, Codex CLI
+
+The rules in this skill are host-independent — only the transport changes.
+
+- **Hermes** — `browser_exec` helpers (`cdp`, `js`, `goto_url`, `vision_analyze`) with
+  `browser.cdp_url: http://127.0.0.1:9222`.
+- **Claude Code** — install at `~/.claude/skills/membean-training/` and drive the same Chrome from
+  Bash through `scripts/cdp.py`. Details: `references/claude-code.md`.
+- **Codex CLI** — install at `~/.agents/skills/membean-training/` (user level) and call the same
+  script from the Codex shell. Codex's sandbox blocks loopback by default, so run with
+  `-c sandbox_workspace_write.network_access=true`. Details: `references/codex.md`.
+
+`scripts/cdp.py` is a dependency-free (stdlib only) CDP CLI that covers every browser action this
+skill needs, so any host with a shell can run the gate and the training loop:
+
+```bash
+CDP="python3 ~/.claude/skills/membean-training/scripts/cdp.py"   # or ~/.agents/skills/...
+$CDP list                       # target ids + urls
+$CDP state  <target>            # signed-in | membean-login-page | password-required | unknown
+$CDP account <target> --expect '<student name>' --expect-class "<class label>"   # exit 2 = STOP
+$CDP sso    <target> --expect student@school.k12.tr           # only when the login page is served
+$CDP probe  <target>            # the dom-map state probe as JSON
+$CDP click  <target> --text "<exact option>"
+$CDP type   <target> WORD --selector 'input[name=choice]'
+$CDP mapimg <target> /tmp/wordmap.png && $CDP mapword <target>
+$CDP shot   <target> /tmp/state.png
+```
+
+When a host has no vision tool, `mapword` still answers the word-map questions: the constellation
+filename is rot13 of `mem<word>bean`. Never skip the Account Gate because a host lacks a helper —
+the CLI gate returns a shell exit code, which is stricter than reading prose.
 
 ## Session Facts (verified 2026-09)
 
@@ -182,7 +214,9 @@ stop, click nothing, and report which identity the page shows. Answering questio
 
 ## Quick Reference
 
-- Probe state: snippet in `references/dom-map.md`.
+- Probe state: snippet in `references/dom-map.md`, or `scripts/cdp.py probe <target>` on any host.
+- Account gate: `scripts/cdp.py account <target> --expect NAME [--expect-class CLASS]` → exit 0 match,
+  exit 2 mismatch.
 - Click a choice: `js("[...document.querySelectorAll('li.choice')].find(e=>e.innerText.trim()==='X').click()")`
 - Advance a word card: `js("[...document.querySelectorAll('input[type=submit]')].find(e=>e.value==='Next').click()")`
 - Flash/state messages live in `#user-growl` and `#answer-status`.

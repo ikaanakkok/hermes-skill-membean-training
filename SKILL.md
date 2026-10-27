@@ -1,7 +1,7 @@
 ---
 name: membean-training
 description: "Do Membean vocabulary training in the school Chrome session."
-version: 1.2.0
+version: 1.2.1
 author: Hermes Agent
 license: MIT
 platforms: [linux]
@@ -61,10 +61,15 @@ minutes and accuracy land in the wrong student's record.
 ### G3. Verify the identity on the page — before the first graded step and after every sign-in
 
 Read it back from the page, never from assumption: greeting name on `/dashboard`
-("Welcome, <name>!"), the class block (**<class label>**), and the signed-in email from
-`https://membean.com/account` when the greeting is ambiguous.
+("Welcome, <name>!"), the class block (**<class label>**), and the account fingerprint Membean
+embeds in outbound links (`user_id=`, base64 — e.g. `Mzk1MTUyNw==` → `3951527`).
 
-The gate passes **only** when name and class (and email when shown) match G1. On any mismatch:
+Verified 2026-10-27: Membean shows **no account email** anywhere in the student UI and
+`https://membean.com/account` is a 404, so the greeting name + class + `user_id` fingerprint are the
+identity signals. `scripts/cdp.py account --expect <name>` matches on any of them; if none of them is
+on the page (login page, spinner, error page) the gate fails closed.
+
+The gate passes **only** when name and class (and the fingerprint when visible) match G1. On any mismatch:
 stop, click nothing, and report which identity the page shows. Answering questions or clicking
 "Start Training" under the wrong account writes minutes and accuracy into that account.
 
